@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - crypto_network
 
   # FastAPI application
   api:
@@ -33,6 +35,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - crypto_network
 
   # Celery worker for background tasks
   celery_worker:
@@ -50,6 +54,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - crypto_network
 
   # Celery beat for scheduled tasks
   celery_beat:
@@ -67,8 +73,10 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - crypto_network
 
-  # Frontend (Nginx serving index.html)
+  # Frontend (Nginx serving static files)
   frontend:
     build:
       context: .
@@ -76,9 +84,17 @@ services:
     container_name: crypto_tracker_frontend
     ports:
       - "3000:80"
+    environment:
+      - API_BASE_URL=http://localhost:8000
     depends_on:
       - api
     restart: unless-stopped
+    networks:
+      - crypto_network
 
 volumes:
   redis_data:
+
+networks:
+  crypto_network:
+    driver: bridge

@@ -92,3 +92,25 @@ def update_market_price(
     db.refresh(market)
 
     return market
+
+
+@router.delete("/{market_id}", status_code=status.HTTP_200_OK)
+def delete_market(
+    market_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a market by ID"""
+    market = db.query(Market).filter(Market.id == market_id).first()
+
+    if not market:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Market with ID {market_id} not found"
+        )
+
+    # Delete the market (cascade will handle related records)
+    db.delete(market)
+    db.commit()
+
+    return {"message": f"Market {market.symbol} deleted successfully"}
