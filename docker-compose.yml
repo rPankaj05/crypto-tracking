@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Redis service for Celery broker
+  redis:
+    image: redis:7-alpine
+    container_name: crypto_tracker_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # FastAPI application
+  api:
+    build: .
+    container_name: crypto_tracker_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=sqlite:///./crypto_tracker.db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Celery worker for background tasks
+  celery_worker:
+    build: .
+    container_name: crypto_tracker_celery_worker
+    command: celery -A app.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=sqlite:///./crypto_tracker.db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Celery beat for scheduled tasks
+  celery_beat:
+    build: .
+    container_name: crypto_tracker_celery_beat
+    command: celery -A app.celery_app beat --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=sqlite:///./crypto_tracker.db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend (Nginx serving index.html)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: crypto_tracker_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  redis_data:
